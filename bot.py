@@ -1,0 +1,167 @@
+import random
+import json
+import os
+from os import path
+import requests
+import time
+import discord
+from discord.ext import commands, tasks
+
+# setup bot instance
+client = commands.Bot(command_prefix = '?')
+
+# for looking at files
+file = None
+
+# (local) project directory
+location = 'C:\\Users\\Jay\\Desktop\\code\\makoto-bot'
+os.chdir(location)
+
+# token ID
+token = None
+
+if path.exists('token.txt'):
+	file = open('token.txt', 'r')
+	token = str(file.read())
+
+
+# AniList authentication URL parameters
+redirect_uri = 'https://anilist.co/api/v2/oauth/pin'
+secret = None
+ani_id = None
+
+if path.exists('ani_id.txt') and path.exists('ani_secret.txt'):
+	file = open('ani_id.txt', 'r')
+	ani_id = str(file.read())
+	file = open('ani_secret.txt', 'r')
+	secret = str(file.read())
+	file = None 
+
+# create AniList authentication URL
+authLink = 'https://anilist.co/api/v2/oauth/authorize?client_id=' + ani_id + '&redirect_uri=' + redirect_uri + '&response_type=code'
+
+# vars for checking if bot should check for response to AniList verification
+user = None
+monitor = False
+authCode = None
+
+@client.event
+async def on_ready():
+	game = discord.Game('with a harem')
+	await client.change_presence(status=discord.Status.online, activity=game)
+	print('Online')
+
+# lists anilist commands
+@client.command(context=True, aliases=['Anilist'])
+async def anilist(ctx, param):
+	print('in anilist!')
+	if 'help' in param:
+		await ctx.send('```help: list commands\nconnect: link account to discord```')
+	# link discord and anilist account
+	elif 'connect' in param:
+		await ctx.send('Connect account by logging in to AniList with the following link and DMing Makoto BOT the authentication code\n**DO NOT PUBLICLY POST IT**\nYou have 30 seconds\nClick here to get your Authorization Code: ' + authLink)
+		
+		# Start checking for verfication code
+		global user
+		global monitor
+
+		user = ctx.author
+		monitor = True
+
+# Resetting variables for security
+@tasks.loop(seconds=30)
+async def change_vars():
+	global monitor
+	global user
+	monitor = None
+	user = None
+
+# Check user messages
+@client.event
+async def on_message(message):
+	# allow access to monitor variable
+	global monitor
+
+	mess = message.content
+	print('\n' + mess + ' ' + str(len(mess)) + '\n')
+
+	# checking Authentication Code
+	if mess.startswith('def') and len(mess) == 736 and message.author is user and monitor:
+		global authCode
+
+		authCode = mess
+
+		await message.channel.send('Authentication Code recieved!')
+		print('About to check authCode')
+
+		if authCode is not None and len(authCode) == 736:
+			data = {
+		    'grant_type': 'authorization_code',
+		    'client_id': ani_id,
+		    'client_secret': secret,
+		    'redirect_uri': redirect_uri, 
+		    'code': authCode
+		  	}
+
+			# send POST request to AniList
+			r = requests.post('https://anilist.co/api/v2/oauth/token', data)
+			if r.status_code == 200:
+				await message.channel.send('successfully connected!')
+				json_data = r.json()
+				print(json_data)
+				print('\n' + json_data['access_token'] + '\n')
+
+				# first check if user in already registered
+				with open('users.json', 'r') as f:
+					users = json.load(f)
+
+				# pair user and token through helper methods
+				await update_data(users, message.author)
+				await add_token(users, message.author, json_data['access_token'])
+
+				# write to file
+				with open('users.json', 'w') as f:
+					json.dump(users, f)
+
+			else:
+				await message.channel.send('an error occurred: ' + str(r.status_code))
+
+			# clear authentication code and monitoring
+			authCode = None
+			monitor = False
+		else:
+			await message.channel.send('verification failed')
+
+	if 'vibe' in mess:
+		await message.channel.send('check')
+	# allow commands to function
+	await client.process_commands(message)
+
+# AniList account connection helper method 1
+async def update_data(users, user):
+	if not user.id in users:
+		users[user.id] = {}
+		users[user.id]['token'] = 'nothin'
+
+# AniList connection helper method 2
+async def add_token(users, user, t):
+	users[user.id]['token'] = t
+
+# laying down the facts (Inside jokes, don't take these seriously)
+@client.command(aliases=['facts'])
+async def fact(ctx):
+	responses = ['Klima is a cuck',
+				'Overwatch is shit',
+				'osu! is the greatest game of all time',
+				'Epstein was murdered by the Clintons',
+				'Xbox is a dead console',
+				'Mara is a demon',
+				'Prison School is 10/10',
+				'2D > 3D',
+				'FMAB is the bestest anime',
+				'Although African Americans take up 14 percent of the population, they commit 40 percent of all crimes',
+				'Best Joe Rogan episode was the one with Alex Jones and Mr. Bravo',
+				'Makoto cares about your education']
+	await ctx.send(random.choice(responses))
+
+client.run(token)

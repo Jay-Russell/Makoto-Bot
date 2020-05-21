@@ -10,9 +10,6 @@ from discord.ext import commands, tasks
 # setup bot instance
 client = commands.Bot(command_prefix = '?')
 
-# for looking at files
-file = None
-
 # (local) project directory
 location = 'C:\\Users\\Jay\\Desktop\\code\\makoto-bot'
 os.chdir(location)
@@ -20,9 +17,8 @@ os.chdir(location)
 # token ID
 token = None
 
-if path.exists('token.txt'):
-	file = open('token.txt', 'r')
-	token = str(file.read())
+if path.exists('token.txt'): 
+	token = str(open('token.txt', 'r').read())
 
 
 # AniList authentication URL parameters
@@ -31,11 +27,8 @@ secret = None
 ani_id = None
 
 if path.exists('ani_id.txt') and path.exists('ani_secret.txt'):
-	file = open('ani_id.txt', 'r')
-	ani_id = str(file.read())
-	file = open('ani_secret.txt', 'r')
-	secret = str(file.read())
-	file = None 
+	ani_id = str(open('ani_id.txt', 'r').read())
+	secret = str(open('ani_secret.txt', 'r').read())
 
 # create AniList authentication URL
 authLink = 'https://anilist.co/api/v2/oauth/authorize?client_id=' + ani_id + '&redirect_uri=' + redirect_uri + '&response_type=code'

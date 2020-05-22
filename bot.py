@@ -1,5 +1,6 @@
 import random
 import json
+import graphene
 import os
 from os import path
 import requests
@@ -46,8 +47,7 @@ async def on_ready():
 
 # lists anilist commands
 @client.command(context=True, aliases=['Anilist'])
-async def anilist(ctx, param):
-	print('in anilist!')
+async def anilist(ctx, param, show):
 	if 'help' in param:
 		await ctx.send('```help: list commands\nconnect: link account to discord```')
 	# link discord and anilist account
@@ -60,6 +60,64 @@ async def anilist(ctx, param):
 
 		user = ctx.author
 		monitor = True
+
+	# search AniList for show and give info in return
+	elif 'search' in param:
+
+		# query of info we want from AniList
+		query = '''
+		query ($id: Int, $search: String, $asHtml: Boolean) {
+	        Media (id: $id, search: $search) {
+	            id
+	            title {
+	                romaji
+	            }
+	            description(asHtml: $asHtml)
+	            coverImage {
+	            	extraLarge
+	            	large
+	            	medium
+	            	color
+	            }
+	            siteUrl
+	        }
+		}
+		'''
+		
+		variables = {
+		    'search': show,
+		    'asHtml': False
+		}
+			
+		source = 'https://graphql.anilist.co'
+		
+		response = requests.post(source, json={'query': query, 'variables': variables})
+		show = response.json();
+		if response.status_code == 200:
+			# parse out website styling
+			desc = str(show['data']['Media']['description'])
+			# italic
+			desc = desc.replace('<i>', '*')
+			desc = desc.replace('</i>', '*')
+			# remove br
+			desc = desc.replace('<br>', '')
+
+			embed = discord.Embed(
+				title = str(show['data']['Media']['title']['romaji']),
+				description = desc,
+				color = discord.Color.blue()
+			)
+
+			embed.set_footer(text=str(show['data']['Media']['siteUrl']))
+			embed.set_image(url=str(show['data']['Media']['coverImage']['large']))
+			#embed.set_thumbnail(url='')
+			#embed.set_author(name='Author Name', icon_url='')
+
+			await ctx.send(embed=embed)
+		else:
+			await ctx.send('Response code: ' + str(response.status_code) + '\n\n' + str(show))
+
+		
 
 # Resetting variables for security
 @tasks.loop(seconds=30)

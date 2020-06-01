@@ -46,8 +46,9 @@ async def on_ready():
 	print('Online')
 
 # lists anilist commands
-@client.command(context=True, aliases=['Anilist'])
-async def anilist(ctx, param, show):
+@client.command(context=True)
+async def a(ctx, param):
+	print('\n' + param + '\n')
 	if 'help' in param:
 		await ctx.send('```help: list commands\nconnect: link account to discord```')
 	# link discord and anilist account
@@ -62,11 +63,12 @@ async def anilist(ctx, param, show):
 		monitor = True
 
 	# search AniList for show and give info in return
-	elif 'search' in param:
-
+	elif 'search' == param or 's' == param :
+		show = str(ctx.message.content)[(len(ctx.prefix) + len('a ' + param + ' ')):]
+		print(show)
 		# query of info we want from AniList
 		query = '''
-		query ($id: Int, $search: String, $asHtml: Boolean) {
+		query ($id: Int, $search: String, $asHtml: Boolean, $isMain: Boolean) {
 	        Media (id: $id, search: $search) {
 	            id
 	            title {
@@ -96,6 +98,13 @@ async def anilist(ctx, param, show):
 	            bannerImage
 	            genres
 	            meanScore
+	            popularity
+	            studios (isMain: $isMain) {
+	            	nodes {
+	            		name
+	            		siteUrl
+	            	}
+	            }
 	            siteUrl
 	        }
 		}
@@ -103,13 +112,14 @@ async def anilist(ctx, param, show):
 		
 		variables = {
 		    'search': show,
-		    'asHtml': False
+		    'asHtml': False,
+		    'isMain': True
 		}
 			
 		source = 'https://graphql.anilist.co'
 		
 		response = requests.post(source, json={'query': query, 'variables': variables})
-		show = response.json();
+		show = response.json()
 		if response.status_code == 200:
 			# parse out website styling
 			desc = str(show['data']['Media']['description'])
@@ -123,10 +133,16 @@ async def anilist(ctx, param, show):
 			# remove br
 			desc = desc.replace('<br>', '')
 
+			# keep '...' in
+			desc = desc.replace('...', '><.')
+
 			# limit description to three sentences
 			sentences = findSentences(desc)
 			if len(sentences) > 3:
 				desc = desc[:sentences[2] + 1]
+
+			# re-insert '...'
+			desc = desc.replace('><', '..')
 
 			# make genre list look nice
 			gees = str(show['data']['Media']['genres'])
@@ -142,40 +158,111 @@ async def anilist(ctx, param, show):
 			)
 
 			embed.set_footer(text=gees)
-			embed.set_image(url=str(show['data']['Media']['bannerImage']))
-			embed.set_thumbnail(url=str(show['data']['Media']['coverImage']['large']))
-			#embed.set_author(name='Author Name', icon_url='')
-			
+			print(str(show['data']['Media']['coverImage']['large']))
+			if str(show['data']['Media']['bannerImage']) != 'None':
+				embed.set_image(url=str(show['data']['Media']['bannerImage']))
+
+			if str(show['data']['Media']['coverImage']['large']) != 'None':
+				embed.set_thumbnail(url=str(show['data']['Media']['coverImage']['large']))
+
+			try:
+				embed.set_author(name=str(show['data']['Media']['studios']['nodes'][0]['name']), url=str(show['data']['Media']['studios']['nodes'][0]['siteUrl']))
+			except IndexError:
+				print('empty studio name or URL')
+
 			# if show is airing, cancelled, finished, or not released
 			status = show['data']['Media']['status']
 
 			if 'NOT_YET_RELEASED' not in status:
 				embed.add_field(name='Score', value=str(show['data']['Media']['meanScore']) + '%', inline=True)
+				embed.add_field(name='Popularity', value=str(show['data']['Media']['popularity']) + ' users', inline=True)
 				if 'RELEASING' not in status:
-					embed.add_field(name='Episodes', value=str(show['data']['Media']['episodes']), inline=True)
-					
-					# seperate score / episodes from season / run time 
-					embed.add_field(name='.', value='.', inline=False)
+					embed.add_field(name='Episodes', value=str(show['data']['Media']['episodes']), inline=False)
 					
 					embed.add_field(name='Season', value=str(show['data']['Media']['seasonYear']) + ' ' + str(show['data']['Media']['season']).title(), inline=True)
 
 					# find difference in year month and days of show's air time 
-					years = abs(show['data']['Media']['endDate']['year'] - show['data']['Media']['startDate']['year'])
-					months = abs(show['data']['Media']['endDate']['month'] - show['data']['Media']['startDate']['month'])
-					days = abs(show['data']['Media']['endDate']['day'] - show['data']['Media']['startDate']['day'])
-					
+					try:
+						air = True
+						years = abs(show['data']['Media']['endDate']['year'] - show['data']['Media']['startDate']['year'])
+						months = abs(show['data']['Media']['endDate']['month'] - show['data']['Media']['startDate']['month'])
+						days = abs(show['data']['Media']['endDate']['day'] - show['data']['Media']['startDate']['day'])
+					except TypeError:
+						print('Error calculating air time')
+						air = False
+
 					# get rid of anything with zero
-					tyme = str(days) + ' days'
-					if months != 0:
-						tyme += ', ' + str(months) + ' months'
-					if years != 0:
-						tyme += ', ' + str(years) + ' years' 
-					
-					embed.add_field(name='Run Time', value=tyme, inline=True)
+					if air:
+						tyme = str(days) + ' days'
+						if months != 0:
+							tyme += ', ' + str(months) + ' months'
+						if years != 0:
+							tyme += ', ' + str(years) + ' years' 
+						
+						embed.add_field(name='Run Time', value=tyme, inline=True)
 			
 			await ctx.send(embed=embed)
 		else:
 			await ctx.send('Response code: ' + str(response.status_code) + '\n\n' + str(show))
+
+	elif 'c' == param or 'character' == param:
+		print('\nin character\n')
+		character = str(ctx.message.content)[(len(ctx.prefix) + len('a ' + param + ' ')):]
+
+		query = '''
+			query ($id: Int, $search: String) {
+				Character (id: $id, search: $search) {
+					id
+					name {
+						full
+						alternative
+					}
+					image {
+						large
+					}
+					media {
+						nodes {
+							title {
+								romaji
+							}
+							coverImage {
+								medium
+							}
+							siteUrl
+						}
+					}
+					siteUrl
+				}
+			}
+		'''
+
+		variables = {
+			'search': character
+		}
+
+		url = 'https://graphql.anilist.co'
+		
+		response = requests.post(url, json={'query': query, 'variables': variables})
+		character = response.json()
+
+		embed = discord.Embed(
+				title = str(character['data']['Character']['name']['full']),
+				color = discord.Color.blue(),
+				url = str(character['data']['Character']['siteUrl'])
+			)
+
+		alts = str(character['data']['Character']['name']['alternative'])
+		alts = alts.replace('\'', '')
+		alts = alts.replace('[', '')
+		alts = alts.replace(']', '')
+
+		embed.set_image(url=str(character['data']['Character']['image']['large']))
+		embed.set_author(name=str(character['data']['Character']['media']['nodes'][0]['title']['romaji']), url=str(character['data']['Character']['media']['nodes'][0]['siteUrl']), icon_url=str(character['data']['Character']['media']['nodes'][0]['coverImage']['medium']))
+		embed.set_footer(text=alts)
+
+		await ctx.send(embed=embed)
+
+
 
 def findSentences(s):
 	return [i for i, letter in enumerate(s) if letter == '.' or letter == '?' or letter == '!']	
@@ -195,7 +282,6 @@ async def on_message(message):
 	global monitor
 
 	mess = message.content
-	print('\n' + mess + ' ' + str(len(mess)) + '\n')
 
 	# checking Authentication Code
 	if mess.startswith('def') and len(mess) == 736 and message.author is user and monitor:

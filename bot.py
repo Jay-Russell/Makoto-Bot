@@ -21,7 +21,6 @@ token = None
 if path.exists('token.txt'): 
 	token = str(open('token.txt', 'r').read())
 
-
 # AniList authentication URL parameters
 redirect_uri = 'https://anilist.co/api/v2/oauth/pin'
 secret = None

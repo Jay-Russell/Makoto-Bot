@@ -82,8 +82,6 @@ async def a(ctx, param):
 		response = requests.post(url, json={'query': query, 'variables': variables})
 		rScore = response.json()
 
-		print(user)
-
 		# first check if user in already registered
 		with open('users.json', 'r') as f:
 			users = json.load(f)

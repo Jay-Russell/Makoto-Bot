@@ -61,6 +61,46 @@ async def a(ctx, param):
 		user = ctx.author
 		monitor = True
 
+	# attach Anilist user to discord account
+	elif 'register' == param or 'r' == param:
+		name = str(ctx.message.content)[(len(ctx.prefix) + len('a ' + param + ' ')):]
+		query = '''
+			query($id: Int, $search: String) {
+				User (id: $id, search: $search) {
+					id
+					name
+				}
+			}
+		'''
+
+		variables = {
+			'search' : name
+		}
+
+		url = 'https://graphql.anilist.co'
+
+		response = requests.post(url, json={'query': query, 'variables': variables})
+		rScore = response.json()
+
+		print(user)
+
+		# first check if user in already registered
+		with open('users.json', 'r') as f:
+			users = json.load(f)
+
+		# pair user and token through helper methods
+		if str(ctx.message.author.id) in users:
+			print(ctx.message.author.id)
+			await ctx.send('you are already registered')
+		else:
+			await update_data(users, ctx.message.author)
+			await add_id_name(users, ctx.message.author, rScore['data']['User']['id'], rScore['data']['User']['name'])
+			await ctx.send('registered!')
+		
+		# write to file
+		with open('users.json', 'w') as f:
+			json.dump(users, f)
+		
 	# search AniList for show and give info in return
 	elif 'search' == param or 's' == param :
 		show = str(ctx.message.content)[(len(ctx.prefix) + len('a ' + param + ' ')):]
@@ -336,13 +376,18 @@ async def on_message(message):
 
 # AniList account connection helper method 1
 async def update_data(users, user):
-	if not user.id in users:
+	if user.id not in users:
 		users[user.id] = {}
 		users[user.id]['token'] = 'nothin'
 
 # AniList connection helper method 2
 async def add_token(users, user, t):
 	users[user.id]['token'] = t
+
+#
+async def add_id_name(users, user, id, name):
+	users[user.id]['id'] = id
+	users[user.id]['name'] = name
 
 # laying down the facts (Inside jokes, don't take these seriously)
 @client.command(aliases=['facts'])
